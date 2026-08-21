@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lab Stock • Use • Waste</title>
+<style>
+body{font-family:Arial,sans-serif;margin:0;background:#f4f7fb;color:#172033}
+header{background:#1769aa;color:#fff;padding:18px;text-align:center}
+main{max-width:1100px;margin:auto;padding:18px}
+.card,.panel{background:#fff;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 2px 10px #0001}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+input,select,button{width:100%;padding:10px;border:1px solid #ccd5df;border-radius:8px;box-sizing:border-box}
+button{background:#1769aa;color:white;border:0;cursor:pointer;font-weight:bold}
+button.danger{background:#d64545}
+.stats{font-size:24px;font-weight:bold}
+table{width:100%;border-collapse:collapse;margin-top:12px;overflow:auto}
+th,td{padding:9px;border-bottom:1px solid #e5e9ef;text-align:left}
+th{background:#eef5fb}
+.small{font-size:13px;color:#657184}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.tabs button{width:auto;padding:10px 18px}
+.hidden{display:none}
+
+.lang{background:#333}.receipt{border:1px dashed #777;padding:18px;margin-top:14px;background:#fff}
+.doctorCard{display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #e5e9ef}
+.doctorCard button{width:auto;padding:6px 12px;margin-left:6px}
+</style>
+</head>
+<body>
+<div id="loginOverlay" style="position:fixed;inset:0;background:#f4f7fb;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px">
+<div class="panel" style="max-width:340px;width:100%">
+<h3 style="text-align:center">🔒 লগইন</h3>
+<input id="loginPasswordInput" type="password" placeholder="পাসওয়ার্ড দিন" onkeypress="if(event.key==='Enter')tryLogin()" style="margin-bottom:10px">
+<button onclick="tryLogin()">প্রবেশ করুন</button>
+<p id="loginError" class="small" style="color:#d64545;margin-top:8px;display:none">ভুল পাসওয়ার্ড, আবার চেষ্টা করুন।</p>
+</div>
+</div>
+<div id="appContent" style="display:none">
+<header><h2>ল্যাব Stock • Use • Waste</h2><div>ল্যাবের মালামালের হিসাব</div></header>
+<main>
+<div class="grid">
+<div class="card"><div class="small">মোট আইটেম</div><div class="stats" id="totalItems">0</div></div>
+<div class="card"><div class="small">বর্তমান মোট স্টক</div><div class="stats" id="totalStock">0</div></div>
+<div class="card"><div class="small">মোট ব্যবহার</div><div class="stats" id="totalUse">0</div></div>
+<div class="card"><div class="small">মোট Waste</div><div class="stats" id="totalWaste">0</div></div>
+</div>
+
+<div class="tabs">
+<button onclick="show('items')">মালামাল</button>
+<button onclick="show('in')">Stock In</button>
+<button onclick="show('use')">Use</button>
+<button onclick="show('waste')">Waste</button>
+<button onclick="show('report')">Report</button><button onclick="show('settings')">Settings</button><button onclick="show('doctorList')">ডাক্তার তালিকা</button><button onclick="show('doctors')">Doctor Serial</button><button onclick="show('ultra')">আল্ট্রা সিরিয়াল</button><button class="lang" onclick="toggleLanguage()">বাংলা / English</button>
+</div>
+
+<section id="items" class="panel">
+<h3>নতুন মালামাল যোগ করুন</h3>
+<div class="grid">
+<input id="itemName" placeholder="মালামালের নাম">
+<input id="unit" placeholder="ইউনিট: পিস/বক্স/প্যাকেট">
+<input id="opening" type="number" min="0" placeholder="Opening Stock">
+<input id="minimum" type="number" min="0" placeholder="Minimum Stock">
+</div><br><button onclick="addItem()">যোগ করুন</button>
+<h3>মালামালের তালিকা</h3><div id="itemTable"></div>
+</section>
+
+<section id="in" class="panel hidden">
+<h3>Stock In / নতুন মাল এসেছে</h3>
+<div class="grid"><select id="inItem"></select><input id="inQty" type="number" min="1" placeholder="পরিমাণ"><input id="inDate" type="date"></div><br>
+<button onclick="addTxn('in')">সংরক্ষণ</button>
+</section>
+
+<section id="use" class="panel hidden">
+<h3>Use / ব্যবহার</h3>
+<div class="grid"><select id="useItem"></select><input id="useQty" type="number" min="1" placeholder="পরিমাণ"><input id="useDate" type="date"></div><br>
+<button onclick="addTxn('use')">সংরক্ষণ</button>
+</section>
+
+<section id="waste" class="panel hidden">
+<h3>Waste / নষ্ট</h3>
+<div class="grid"><select id="wasteItem"></select><input id="wasteQty" type="number" min="1" placeholder="পরিমাণ"><input id="wasteDate" type="date"><input id="reason" placeholder="নষ্ট হওয়ার কারণ"></div><br>
+<button onclick="addTxn('waste')">সংরক্ষণ</button>
+</section>
+
+<section id="report" class="panel hidden">
+<h3>Stock Report</h3>
+<div id="reportTable"></div>
+</section>
+
+
+<section id="doctorList" class="panel hidden">
+<h3 data-bn="ডাক্তার যোগ করুন" data-en="Add Doctor">ডাক্তার যোগ করুন</h3>
+<div class="grid">
+<input id="newDoctorName" placeholder="ডাক্তারের নাম / Doctor Name">
+<input id="newDoctorSpecialty" placeholder="বিশেষত্ব / Specialty">
+<input id="newDoctorFee" type="number" min="0" placeholder="ফি / Fee">
+</div><br>
+<button onclick="addDoctor()" data-bn="ডাক্তার যোগ করুন" data-en="Add Doctor">ডাক্তার যোগ করুন</button>
+<h3 data-bn="ডাক্তারদের তালিকা" data-en="Doctor List">ডাক্তারদের তালিকা</h3>
+<div id="doctorListTable"></div>
+</section>
+
+<section id="doctors" class="panel hidden">
+<h3 data-bn="ডাক্তার ও সিরিয়াল" data-en="Doctors & Serial">ডাক্তার ও সিরিয়াল</h3>
+<div class="grid">
+<select id="doctorSelect" onchange="fillDoctor()"></select>
+<input id="doctorSpecialty" placeholder="বিশেষত্ব / Specialty" readonly>
+<input id="doctorFee" type="number" min="0" placeholder="ফি / Fee">
+<input id="patientName" placeholder="রোগীর নাম / Patient Name">
+<input id="patientMobile" placeholder="মোবাইল / Mobile">
+</div>
+<p class="small" data-bn="তালিকায় ডাক্তার না থাকলে 'ডাক্তার তালিকা' ট্যাব থেকে আগে যোগ করুন।" data-en="If the doctor isn't listed, add them first from the 'Doctor List' tab.">তালিকায় ডাক্তার না থাকলে 'ডাক্তার তালিকা' ট্যাব থেকে আগে যোগ করুন।</p>
+<button onclick="takeSerial()" data-bn="সিরিয়াল দিন" data-en="Give Serial">সিরিয়াল দিন</button>
+<div id="serialReceipt"></div>
+<h3 data-bn="আজকের সিরিয়াল" data-en="Today's Serials">আজকের সিরিয়াল</h3>
+<div id="serialTable"></div>
+</section>
+
+<section id="ultra" class="panel hidden">
+<h3 data-bn="আল্ট্রা সিরিয়াল" data-en="Ultra Serial">আল্ট্রা সিরিয়াল</h3>
+<div class="grid">
+<input id="ultraType" placeholder="পরীক্ষার ধরন / Test Type (যেমন: USG - Abdomen)">
+<input id="ultraFee" type="number" min="0" placeholder="ফি / Fee">
+<input id="ultraPatientName" placeholder="রোগীর নাম / Patient Name">
+<input id="ultraPatientMobile" placeholder="মোবাইল / Mobile">
+</div><br>
+<button onclick="takeUltraSerial()" data-bn="সিরিয়াল দিন" data-en="Give Serial">সিরিয়াল দিন</button>
+<div id="ultraReceipt"></div>
+<h3 data-bn="আজকের আল্ট্রা সিরিয়াল" data-en="Today's Ultra Serials">আজকের আল্ট্রা সিরিয়াল</h3>
+<div id="ultraTable"></div>
+</section>
+
+<section id="settings" class="panel hidden">
+<h3>সফটওয়্যার সেটিংস / Software Settings</h3>
+<div class="grid">
+<input id="businessName" placeholder="প্রতিষ্ঠানের নাম / Business Name">
+<input id="businessAddress" placeholder="ঠিকানা / Address">
+<input id="businessPhone" placeholder="ফোন / Phone">
+<div>
+<label class="small" data-bn="লোগো ছবি নির্বাচন করুন" data-en="Choose logo image">লোগো ছবি নির্বাচন করুন</label>
+<input id="businessLogo" type="file" accept="image/*">
+</div>
+<button onclick="saveBranding()">Branding Save</button>
+</div>
+<div id="logoPreviewBox" style="margin-top:10px"></div><br>
+<div class="grid"><input id="softwareName" placeholder="সফটওয়্যারের নাম"><button onclick="changeSoftwareName()">নাম পরিবর্তন করুন</button></div>
+<p class="small">এখান থেকে সফটওয়্যারের নাম নিজের মতো করে পরিবর্তন করতে পারবেন।</p>
+<h3 data-bn="লগইন পাসওয়ার্ড" data-en="Login Password">লগইন পাসওয়ার্ড</h3>
+<div class="grid"><input id="newPassword" type="password" placeholder="নতুন পাসওয়ার্ড"><button onclick="changePassword()" data-bn="পাসওয়ার্ড পরিবর্তন করুন" data-en="Change Password">পাসওয়ার্ড পরিবর্তন করুন</button></div>
+<p class="small" data-bn="ওয়েবসাইট খোলার পাসওয়ার্ড এখান থেকে পরিবর্তন করতে পারবেন।" data-en="Change the password required to open the website here.">ওয়েবসাইট খোলার পাসওয়ার্ড এখান থেকে পরিবর্তন করতে পারবেন।</p>
+<button class="danger" onclick="logout()" data-bn="লগআউট" data-en="Logout" style="margin-top:6px">লগআউট</button>
+<h3>মালামাল Edit / Delete</h3><div id="editItems"></div>
+<h3>এন্ট্রি Edit / Delete</h3><div id="txnTable"></div>
+</section>
+</main>
+</div>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyAYQ2nPao82M237u6zOtvyJLzpRCBndxb4",
+  authDomain: "janakallan-83fa4.firebaseapp.com",
+  projectId: "janakallan-83fa4",
+  storageBucket: "janakallan-83fa4.firebasestorage.app",
+  messagingSenderId: "117165747184",
+  appId: "1:117165747184:web:8284c5965fd8e10c9d4b35"
+};
+firebase.initializeApp(firebaseConfig);
+const db=firebase.firestore();
+const docRef=db.collection('labstock').doc('main');
+
+let data={items:[],txns:[]};
+let settings={name:"ল্যাব Stock • Use • Waste",business:"Janakallan Diagnostic & Doctor’s Chamber",address:"Alikadam Bazaar, Alikadam, Bandarban",phone:"",logo:"",loginPassword:"1234"};
+let lang='bn';
+let serials=[];
+let doctors=[];
+let ultras=[];
+const today=new Date().toISOString().slice(0,10);
+
+function tryLogin(){
+ let pw=loginPasswordInput.value;
+ let correct=settings.loginPassword||'1234';
+ if(pw===correct){
+  localStorage.setItem('labstock_logged_in','1');
+  document.getElementById('loginOverlay').style.display='none';
+  document.getElementById('appContent').style.display='';
+ } else {
+  document.getElementById('loginError').style.display='block';
+ }
+}
+function logout(){
+ localStorage.removeItem('labstock_logged_in');
+ location.reload();
+}
+function changePassword(){
+ let p=newPassword.value.trim();
+ if(!p)return alert(lang==='bn'?'নতুন পাসওয়ার্ড দিন':'Enter new password');
+ settings.loginPassword=p; cloudSave(); newPassword.value='';
+ alert(lang==='bn'?'পাসওয়ার্ড পরিবর্তন হয়েছে':'Password changed');
+}
+if(localStorage.getItem('labstock_logged_in')==='1'){
+ document.getElementById('loginOverlay').style.display='none';
+ document.getElementById('appContent').style.display='';
+}
+
+function cloudSave(){
+ docRef.set({items:data.items,txns:data.txns,doctors:doctors,serials:serials,ultras:ultras,settings:settings,lang:lang},{merge:true})
+  .catch(function(e){console.error(e);alert(lang==='bn'?'ইন্টারনেট সংযোগ সমস্যা - ডেটা সেভ হয়নি। ইন্টারনেট চেক করুন।':'Network error - data not saved. Check your internet connection.');});
+}
+function save(){cloudSave();render();}
+
+function applyLanguage(){
+ document.querySelectorAll('[data-bn]').forEach(function(e){e.textContent=e.getAttribute(lang==='bn'?'data-bn':'data-en');});
+ document.querySelector('header div').textContent=lang==='bn'?'ল্যাবের মালামাল ও ডাক্তার সিরিয়াল':'Lab Stock & Doctor Serial';
+}
+
+function saveBranding(){
+ settings.name=softwareName.value.trim()||settings.name;
+ settings.business=businessName.value.trim()||settings.business;
+ settings.address=businessAddress.value.trim()||settings.address;
+ settings.phone=businessPhone.value.trim()||settings.phone;
+ let file=businessLogo.files&&businessLogo.files[0];
+ function finishSave(){
+  cloudSave();
+  document.querySelector('header h2').textContent=settings.name;
+  if(typeof businessName!=='undefined'){businessName.value=settings.business;businessAddress.value=settings.address;businessPhone.value=settings.phone;businessLogo.value='';}
+  showLogoPreview();
+  alert('Branding saved');
+ }
+ if(file){
+  let reader=new FileReader();
+  reader.onload=function(e){settings.logo=e.target.result;finishSave();};
+  reader.onerror=function(){alert(lang==='bn'?'লোগো লোড করা যায়নি':'Could not load logo');finishSave();};
+  reader.readAsDataURL(file);
+ } else {
+  finishSave();
+ }
+}
+function removeLogo(){
+ settings.logo='';
+ cloudSave();
+ showLogoPreview();
+}
+function showLogoPreview(){
+ let box=document.getElementById('logoPreviewBox');
+ if(!box)return;
+ box.innerHTML=settings.logo?`<img src="${settings.logo}" style="max-width:120px;max-height:80px;display:block;margin-bottom:8px"><button onclick="removeLogo()" style="width:auto;padding:6px 12px" class="danger">${lang==='bn'?'লোগো মুছুন':'Remove Logo'}</button>`:'';
+}
+['inDate','useDate','wasteDate'].forEach(id=>document.getElementById(id).value=today);
+
+function changeSoftwareName(){
+ let n=softwareName.value.trim(); if(!n)return alert('সফটওয়্যারের নাম দিন');
+ settings.name=n; cloudSave();
+ document.querySelector('header h2').textContent=n; softwareName.value=''; alert('নাম পরিবর্তন হয়েছে');
+}
+function editItem(id){
+ let i=data.items.find(x=>x.id===id); if(!i)return;
+ let n=prompt('মালামালের নাম',i.name); if(n===null)return;
+ let u=prompt('ইউনিট',i.unit); if(u===null)return;
+ let m=prompt('Minimum Stock',i.min); if(m===null)return;
+ i.name=n.trim()||i.name; i.unit=u.trim()||i.unit; i.min=+m||0; save();
+}
+function deleteItem(id){
+ if(data.txns.some(t=>t.item===id)) return alert('এই আইটেমের এন্ট্রি আছে। আগে এন্ট্রিগুলো মুছুন।');
+ if(confirm('এই মালামালটি মুছে ফেলবেন?')){data.items=data.items.filter(i=>i.id!==id);save();}
+}
+function editTxn(id){
+ let t=data.txns.find(x=>x.id===id); if(!t)return;
+ let q=prompt('পরিমাণ',t.qty); if(q===null)return;
+ let d=prompt('তারিখ (YYYY-MM-DD)',t.date); if(d===null)return;
+ t.qty=+q||t.qty; t.date=d||t.date; if(t.type==='waste'){let r=prompt('Waste কারণ',t.reason||'');if(r!==null)t.reason=r}
+ save();
+}
+function deleteTxn(id){if(confirm('এই এন্ট্রি মুছবেন?')){data.txns=data.txns.filter(t=>t.id!==id);save();}}
+function show(id){document.querySelectorAll('section').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');render()}
+function addItem(){
+ let name=itemName.value.trim(), u=unit.value.trim()||'পিস', o=+opening.value||0, m=+minimum.value||0;
+ if(!name)return alert('মালামালের নাম দিন');
+ data.items.push({id:Date.now(),name,unit:u,opening:o,min:m}); itemName.value=unit.value=opening.value=minimum.value='';save();
+}
+function addTxn(type){
+ let sel=document.getElementById(type==='in'?'inItem':type==='use'?'useItem':'wasteItem');
+ let qty=+(document.getElementById(type==='in'?'inQty':type==='use'?'useQty':'wasteQty').value||0);
+ let date=document.getElementById(type==='in'?'inDate':type==='use'?'useDate':'wasteDate').value||today;
+ if(!sel.value||qty<=0)return alert('আইটেম ও পরিমাণ দিন');
+ data.txns.push({id:Date.now(),item:+sel.value,type,qty,date,reason:type==='waste'?reason.value.trim():''});
+ document.getElementById(type==='in'?'inQty':type==='use'?'useQty':'wasteQty').value='';
+ if(type==='waste')reason.value='';
+ save();
+}
+function calc(i){
+ let inq=data.txns.filter(t=>t.item===i.id&&t.type==='in').reduce((a,t)=>a+t.qty,0);
+ let use=data.txns.filter(t=>t.item===i.id&&t.type==='use').reduce((a,t)=>a+t.qty,0);
+ let waste=data.txns.filter(t=>t.item===i.id&&t.type==='waste').reduce((a,t)=>a+t.qty,0);
+ return {inq,use,waste,stock:i.opening+inq-use-waste};
+}
+
+function addDoctor(){
+ let name=newDoctorName.value.trim(), sp=newDoctorSpecialty.value.trim(), fee=+newDoctorFee.value||0;
+ if(!name)return alert(lang==='bn'?'ডাক্তারের নাম দিন':'Enter doctor name');
+ doctors.push({id:Date.now(),name,specialty:sp,fee});
+ cloudSave();
+ newDoctorName.value=newDoctorSpecialty.value=newDoctorFee.value='';
+ render();
+}
+function editDoctor(id){
+ let d=doctors.find(x=>x.id===id); if(!d)return;
+ let n=prompt(lang==='bn'?'ডাক্তারের নাম':'Doctor name',d.name); if(n===null)return;
+ let sp=prompt(lang==='bn'?'বিশেষত্ব':'Specialty',d.specialty); if(sp===null)return;
+ let f=prompt(lang==='bn'?'ফি':'Fee',d.fee); if(f===null)return;
+ d.name=n.trim()||d.name; d.specialty=sp.trim(); d.fee=+f||0;
+ cloudSave(); render();
+}
+function deleteDoctor(id){
+ if(confirm(lang==='bn'?'এই ডাক্তারকে মুছবেন?':'Delete this doctor?')){
+  doctors=doctors.filter(d=>d.id!==id);
+  cloudSave(); render();
+ }
+}
+function fillDoctor(){
+ let d=doctors.find(x=>x.id==doctorSelect.value);
+ doctorSpecialty.value=d?d.specialty:'';
+ doctorFee.value=d?d.fee:'';
+}
+
+function toggleLanguage(){
+ lang=lang==='bn'?'en':'bn';
+ cloudSave();
+ applyLanguage();
+ render();
+}
+function takeSerial(){
+ let doc=doctors.find(x=>x.id==doctorSelect.value);
+ let patient=patientName.value.trim();
+ if(!doc||!patient)return alert(lang==='bn'?'ডাক্তার নির্বাচন করুন ও রোগীর নাম দিন':'Select a doctor and enter patient name');
+ let doctor=doc.name;
+ let date=new Date().toISOString().slice(0,10);
+ let max=serials.filter(s=>s.date===date&&s.doctor===doctor).reduce((m,s)=>Math.max(m,s.no),0);
+ let s={id:Date.now(),date,no:max+1,doctor,specialty:doctorSpecialty.value.trim(),fee:+doctorFee.value||0,patient,mobile:patientMobile.value.trim(),time:new Date().toLocaleTimeString()};
+ serials.push(s); cloudSave();
+ serialReceipt.innerHTML=`<div class="receipt" id="printArea"><div id="receiptContent">${settings.logo?`<img src="${settings.logo}" style="max-width:90px;max-height:60px"><br>`:''}<h3>${settings.business}</h3><div>${settings.address||''}</div><div>${settings.phone||''}</div><hr><h3>${settings.name}</h3><h2>${lang==='bn'?'ডাক্তার সিরিয়াল':'Doctor Serial'} #${s.no}</h2>
+ <p><b>${lang==='bn'?'ডাক্তার':'Doctor'}:</b> ${s.doctor}</p><p><b>${lang==='bn'?'রোগী':'Patient'}:</b> ${s.patient}</p>
+ <p><b>${lang==='bn'?'বিশেষত্ব':'Specialty'}:</b> ${s.specialty||'-'}</p><p><b>${lang==='bn'?'ফি':'Fee'}:</b> ${s.fee}</p>
+ <p><b>${lang==='bn'?'তারিখ':'Date'}:</b> ${s.date} &nbsp; <b>${lang==='bn'?'সময়':'Time'}:</b> ${s.time}</p></div>
+ <button onclick="printReceipt('receiptContent')">${lang==='bn'?'রিসিভ প্রিন্ট করুন':'Print Receipt'}</button></div>`;
+ patientName.value=patientMobile.value='';
+ render();
+}
+function takeUltraSerial(){
+ let type=ultraType.value.trim();
+ let patient=ultraPatientName.value.trim();
+ if(!type||!patient)return alert(lang==='bn'?'পরীক্ষার ধরন ও রোগীর নাম দিন':'Enter test type and patient name');
+ let date=new Date().toISOString().slice(0,10);
+ let max=ultras.filter(u=>u.date===date).reduce((m,u)=>Math.max(m,u.no),0);
+ let u={id:Date.now(),date,no:max+1,type,fee:+ultraFee.value||0,patient,mobile:ultraPatientMobile.value.trim(),time:new Date().toLocaleTimeString()};
+ ultras.push(u); cloudSave();
+ ultraReceipt.innerHTML=`<div class="receipt" id="printAreaUltra"><div id="ultraReceiptContent">${settings.logo?`<img src="${settings.logo}" style="max-width:90px;max-height:60px"><br>`:''}<h3>${settings.business}</h3><div>${settings.address||''}</div><div>${settings.phone||''}</div><hr><h3>${settings.name}</h3><h2>${lang==='bn'?'আল্ট্রা সিরিয়াল':'Ultra Serial'} #${u.no}</h2>
+ <p><b>${lang==='bn'?'পরীক্ষা':'Test'}:</b> ${u.type}</p><p><b>${lang==='bn'?'রোগী':'Patient'}:</b> ${u.patient}</p>
+ <p><b>${lang==='bn'?'ফি':'Fee'}:</b> ${u.fee}</p>
+ <p><b>${lang==='bn'?'তারিখ':'Date'}:</b> ${u.date} &nbsp; <b>${lang==='bn'?'সময়':'Time'}:</b> ${u.time}</p></div>
+ <button onclick="printReceipt('ultraReceiptContent')">${lang==='bn'?'রিসিভ প্রিন্ট করুন':'Print Receipt'}</button></div>`;
+ ultraPatientName.value=ultraPatientMobile.value='';
+ render();
+}
+function deleteUltra(id){
+ if(confirm(lang==='bn'?'এই সিরিয়াল মুছবেন?':'Delete this serial?')){
+  ultras=ultras.filter(u=>u.id!==id);cloudSave();render();
+ }
+}
+function printReceipt(contentId){
+ let content=document.getElementById(contentId||'receiptContent');
+ if(!content)return;
+ let iframe=document.getElementById('printFrame');
+ if(!iframe){
+  iframe=document.createElement('iframe');
+  iframe.id='printFrame';
+  iframe.style.position='fixed';
+  iframe.style.right='0';
+  iframe.style.bottom='0';
+  iframe.style.width='0';
+  iframe.style.height='0';
+  iframe.style.border='0';
+  document.body.appendChild(iframe);
+ }
+ let doc=iframe.contentWindow.document;
+ doc.open();
+ doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Receipt</title><style>@page{size:80mm auto;margin:2mm}html,body{width:76mm}body{font-family:Arial,sans-serif;padding:2mm;color:#000;font-size:12px}img{max-width:60px;max-height:45px;display:block;margin:0 auto}hr{margin:6px 0;border:none;border-top:1px dashed #000}h2,h3{margin:4px 0;font-size:14px;text-align:center}h2{font-size:15px}p{margin:3px 0}</style></head><body>'+content.innerHTML+'</body></html>');
+ doc.close();
+ setTimeout(function(){
+  try{
+   iframe.contentWindow.focus();
+   iframe.contentWindow.print();
+  }catch(e){
+   alert(lang==='bn'?'প্রিন্ট করা যায়নি। আপনার ব্রাউজার প্রিন্ট সাপোর্ট করছে না।':'Could not print. Your browser may not support printing.');
+  }
+ },300);
+}
+function deleteSerial(id){
+ if(confirm(lang==='bn'?'এই সিরিয়াল মুছবেন?':'Delete this serial?')){
+  serials=serials.filter(s=>s.id!==id);cloudSave();render();
+ }
+}
+
+function render(){
+ totalItems.textContent=data.items.length;
+ totalStock.textContent=data.items.reduce((a,i)=>a+calc(i).stock,0);
+ totalUse.textContent=data.txns.filter(t=>t.type==='use').reduce((a,t)=>a+t.qty,0);
+ totalWaste.textContent=data.txns.filter(t=>t.type==='waste').reduce((a,t)=>a+t.qty,0);
+ let opts='<option value="">আইটেম নির্বাচন করুন</option>'+data.items.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
+ inItem.innerHTML=useItem.innerHTML=wasteItem.innerHTML=opts;
+ itemTable.innerHTML='<table><tr><th>নাম</th><th>ইউনিট</th><th>Opening</th><th>বর্তমান</th><th>অবস্থা</th></tr>'+data.items.map(i=>{let c=calc(i);return `<tr><td>${i.name}</td><td>${i.unit}</td><td>${i.opening}</td><td>${c.stock}</td><td>${c.stock<=i.min?'⚠️ কম':'ঠিক আছে'}</td></tr>`}).join('')+'</table>';
+ reportTable.innerHTML='<table><tr><th>মালামাল</th><th>Opening</th><th>In</th><th>Use</th><th>Waste</th><th>Current</th></tr>'+data.items.map(i=>{let c=calc(i);return `<tr><td>${i.name}</td><td>${i.opening}</td><td>${c.inq}</td><td>${c.use}</td><td>${c.waste}</td><td><b>${c.stock}</b></td></tr>`}).join('')+'</table>';
+editItems.innerHTML='<table><tr><th>নাম</th><th>Opening</th><th>Unit</th><th>Action</th></tr>'+data.items.map(i=>`<tr><td>${i.name}</td><td>${i.opening}</td><td>${i.unit}</td><td><button onclick="editItem(${i.id})">Edit</button> <button class="danger" onclick="deleteItem(${i.id})">Delete</button></td></tr>`).join('')+'</table>';
+txnTable.innerHTML='<table><tr><th>তারিখ</th><th>মালামাল</th><th>ধরন</th><th>পরিমাণ</th><th>Action</th></tr>'+data.txns.map(t=>{let i=data.items.find(x=>x.id===t.item);return `<tr><td>${t.date}</td><td>${i?i.name:'Deleted'}</td><td>${t.type==='in'?'Stock In':t.type==='use'?'Use':'Waste'}</td><td>${t.qty}</td><td><button onclick="editTxn(${t.id})">Edit</button> <button class="danger" onclick="deleteTxn(${t.id})">Delete</button></td></tr>`}).join('')+'</table>';
+serialTable.innerHTML='<table><tr><th>Serial</th><th>Doctor</th><th>Patient</th><th>Mobile</th><th>Fee</th><th>Action</th></tr>'+
+serials.filter(s=>s.date===today).map(s=>`<tr><td>${s.no}</td><td>${s.doctor}</td><td>${s.patient}</td><td>${s.mobile||'-'}</td><td>${s.fee}</td><td><button onclick="deleteSerial(${s.id})">Delete</button></td></tr>`).join('')+'</table>';
+ultraTable.innerHTML='<table><tr><th>Serial</th><th>Test</th><th>Patient</th><th>Mobile</th><th>Fee</th><th>Action</th></tr>'+
+ultras.filter(u=>u.date===today).map(u=>`<tr><td>${u.no}</td><td>${u.type}</td><td>${u.patient}</td><td>${u.mobile||'-'}</td><td>${u.fee}</td><td><button onclick="deleteUltra(${u.id})">Delete</button></td></tr>`).join('')+'</table>';
+
+let curDoc=doctorSelect.value;
+doctorSelect.innerHTML='<option value="">'+(lang==='bn'?'ডাক্তার নির্বাচন করুন':'Select Doctor')+'</option>'+doctors.map(d=>`<option value="${d.id}">${d.name}${d.specialty?' - '+d.specialty:''}</option>`).join('');
+if(curDoc && doctors.some(d=>d.id==curDoc)){doctorSelect.value=curDoc;} else {doctorSpecialty.value='';doctorFee.value='';}
+
+doctorListTable.innerHTML = doctors.length ? doctors.map(d=>`<div class="doctorCard"><div><b>${d.name}</b>${d.specialty?' - '+d.specialty:''}<div class="small">${lang==='bn'?'ফি':'Fee'}: ${d.fee}</div></div><div><button onclick="editDoctor(${d.id})">Edit</button><button class="danger" onclick="deleteDoctor(${d.id})">Delete</button></div></div>`).join('') : `<p class="small">${lang==='bn'?'কোনো ডাক্তার যোগ করা হয়নি':'No doctors added yet'}</p>`;
+showLogoPreview();
+}
+
+render();
+
+docRef.onSnapshot(function(snap){
+ if(snap.exists){
+  let d=snap.data();
+  data.items=d.items||[];
+  data.txns=d.txns||[];
+  doctors=d.doctors||[];
+  serials=d.serials||[];
+  ultras=d.ultras||[];
+  if(d.settings)settings=Object.assign({loginPassword:'1234'},d.settings);
+  if(d.lang)lang=d.lang;
+ } else {
+  docRef.set({items:[],txns:[],doctors:[],serials:[],ultras:[],settings:settings,lang:lang});
+ }
+ document.querySelector('header h2').textContent=settings.name;
+ applyLanguage();
+ render();
+}, function(err){
+ console.error(err);
+ alert(lang==='bn'?'ডেটা লোড করা যায়নি। ইন্টারনেট সংযোগ চেক করুন।':'Could not load data. Check your internet connection.');
+});
+
+</script>
+</body>
+</html>
